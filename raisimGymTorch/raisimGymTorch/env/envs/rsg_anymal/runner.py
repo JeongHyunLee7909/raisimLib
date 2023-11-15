@@ -64,16 +64,17 @@ critic = ppo_module.Critic(ppo_module.MLP(cfg['architecture']['value_net'], nn.L
 
 saver = ConfigurationSaver(log_dir=home_path + "/raisimGymTorch/data/"+task_name,
                            save_items=[task_path + "/cfg.yaml", task_path + "/Environment.hpp"])
-tensorboard_launcher(saver.data_dir+"/..")  # press refresh (F5) after the first ppo update
+# tensorboard_launcher(saver.data_dir+"/..")  # press refresh (F5) after the first ppo update
 
 ppo = PPO.PPO(actor=actor,
               critic=critic,
               num_envs=cfg['environment']['num_envs'],
               num_transitions_per_env=n_steps,
-              num_learning_epochs=4,
-              gamma=0.996,
+              num_learning_epochs=16,
+              gamma=0.99,
               lam=0.95,
-              num_mini_batches=4,
+              num_mini_batches=1,
+              entropy_coef=0.005,
               device=device,
               log_dir=saver.data_dir,
               shuffle_batch=False,
@@ -84,7 +85,7 @@ reward_analyzer = RewardAnalyzer(env, ppo.writer)
 if mode == 'retrain':
     load_param(weight_path, env, actor, critic, ppo.optimizer, saver.data_dir)
 
-for update in range(1000000):
+for update in range(10001):
     start = time.time()
     env.reset()
     reward_sum = 0
@@ -104,7 +105,8 @@ for update in range(1000000):
         loaded_graph.load_state_dict(torch.load(saver.data_dir+"/full_"+str(update)+'.pt')['actor_architecture_state_dict'])
 
         env.turn_on_visualization()
-        env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
+        if update > 0:
+            env.start_video_recording(datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + "policy_"+str(update)+'.mp4')
 
         for step in range(n_steps):
             with torch.no_grad():
@@ -118,7 +120,8 @@ for update in range(1000000):
                 if wait_time > 0.:
                     time.sleep(wait_time)
 
-        env.stop_video_recording()
+        if update > 0:
+            env.stop_video_recording()
         env.turn_off_visualization()
 
         reward_analyzer.analyze_and_plot(update)

@@ -7,7 +7,15 @@ import math
 import time
 import torch
 import argparse
+import numpy as np
+import pygame
+import datetime
 
+pygame.init()
+pygame.joystick.init()
+joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+for joystick in joysticks:
+    print(joystick.get_name())
 
 # configuration
 parser = argparse.ArgumentParser()
@@ -55,10 +63,30 @@ else:
     env.turn_on_visualization()
 
     # max_steps = 1000000
-    max_steps = 1000 ## 10 secs
+    max_steps = 3000 ## 10 secs
+    command = np.zeros(3, dtype=np.float32)
+    env.start_video_recording("tester/tester_"+str(iteration_number)+"_"+datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S") + ".mp4")
 
     for step in range(max_steps):
-        time.sleep(0.01)
+        for event in pygame.event.get():  # User did something.
+            if event.type == pygame.JOYBUTTONDOWN:  # If user clicked close.
+                if event.button == 0:
+                    env.curriculum_callback()
+                    env.reset()
+                    print("change env")
+                elif event.button == 1:
+                    env.reset()
+                    print("env reset")
+        if len(joysticks) > 0:
+            command[0] = -2 * joysticks[0].get_axis(1)
+            command[1] = - joysticks[0].get_axis(0)
+            command[2] = - joysticks[0].get_axis(3)
+        if abs(command[0]) < 0.05:
+            command[0] = 0
+        if abs(command[1]) < 0.05:
+            command[1] = 0
+        
+        env.set_command(command)
         obs = env.observe(False)
         action_ll = loaded_graph.architecture(torch.from_numpy(obs).cpu())
         reward_ll, dones = env.step(action_ll.cpu().detach().numpy())
@@ -71,6 +99,9 @@ else:
             start_step_id = step + 1
             reward_ll_sum = 0.0
 
+        time.sleep(0.01)
+
     env.turn_off_visualization()
+    env.stop_video_recording()
     env.reset()
     print("Finished at the maximum visualization steps")

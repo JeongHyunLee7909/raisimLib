@@ -96,6 +96,10 @@ class VectorizedEnvironment {
       perAgentStep(i, action, reward, done);
   }
 
+  void setCommand(const Eigen::Ref<EigenVec>& command) {
+    environments_[0]->setCommand(command);
+  }
+
   void turnOnVisualization() { if(render_) environments_[0]->turnOnVisualization(); }
   void turnOffVisualization() { if(render_) environments_[0]->turnOffVisualization(); }
   void startRecordingVideo(const std::string& videoName) { if(render_) environments_[0]->startRecordingVideo(videoName); }
@@ -180,7 +184,7 @@ class VectorizedEnvironment {
     done[agentId] = environments_[agentId]->isTerminalState(terminalReward);
 
     if (done[agentId]) {
-      environments_[agentId]->reset();
+      environments_[agentId]->resetTerminate();
       reward[agentId] += terminalReward;
     }
   }
