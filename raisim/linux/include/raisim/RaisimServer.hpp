@@ -853,6 +853,27 @@ class RaisimServer final {
   }
 
   /**
+   * Check if there is any sensor that has to be updated from the visualizer
+   * @return if any of the sensors needs an update
+   */
+  inline bool needsSensorUpdate() {
+    auto &objList = world_->getObjList();
+    for (auto *ob: objList) {
+      if (ob->getObjectType() == ObjectType::ARTICULATED_SYSTEM) {
+        auto as = dynamic_cast<ArticulatedSystem *>(ob);
+        for (auto &sensor: as->getSensors()) {
+          if (sensor.second->getMeasurementSource() == Sensor::MeasurementSource::VISUALIZER &&
+              sensor.second->getUpdateTimeStamp() + 1. / sensor.second->getUpdateRate()
+                  < world_->getWorldTime() + 1e-10) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /**
    * Synchronous update method.
    * Receive a request from the client, process it and return the requested data to the client.
    * The method return false if 1) the client failed to respond 2) the client protocol version is different 3) the client refused to receive the data 4) the client did not send the sensor data in time
@@ -1186,6 +1207,7 @@ class RaisimServer final {
               < world_->getWorldTime() + 1e-10) {
         data_ = set(data_, true);
         needsSensorUpdate_ = true;
+        sensorUpdateTime_ = world_->getWorldTime();
       } else {
         data_ = set(data_, false);
       }
@@ -1691,14 +1713,14 @@ class RaisimServer final {
         auto &img = std::static_pointer_cast<RGBCamera>(sensor)->getImageBuffer();
         RSFATAL_IF(width * height * 4 != img.size(), "Image size mismatch. Sensor module not working properly")
         rData_ = getN(rData_, img.data(), width * height * 4);
-        sensor->setUpdateTimeStamp(world_->getWorldTime());
+        sensor->setUpdateTimeStamp(sensorUpdateTime_);
       } else if (type == Sensor::Type::DEPTH) {
         int width, height;
         rData_ = get(rData_, &width, &height);
         auto &depthArray = std::static_pointer_cast<DepthCamera>(sensor)->getDepthArray();
         RSFATAL_IF(width * height != depthArray.size(), "Image size mismatch. Sensor module not working properly")
         rData_ = getN(rData_, depthArray.data(), width * height);
-        sensor->setUpdateTimeStamp(world_->getWorldTime());
+        sensor->setUpdateTimeStamp(sensorUpdateTime_);
       }
     }
 
@@ -1707,6 +1729,7 @@ class RaisimServer final {
 
   char *data_, *rData_;
   bool needsSensorUpdate_ = false;
+  double sensorUpdateTime_;
   World *world_;
   std::vector<char> receive_buffer, send_buffer;
   bool connected_ = false;
